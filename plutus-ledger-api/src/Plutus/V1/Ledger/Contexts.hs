@@ -56,7 +56,7 @@ module Plutus.V1.Ledger.Contexts
 
 import           GHC.Generics                (Generic)
 import           PlutusTx
-import qualified PlutusTx.Builtins           as Builtins
+import qualified PlutusTx.Builtins           as Plutus
 import           PlutusTx.Prelude
 
 import           Plutus.V1.Ledger.Ada        (Ada)
@@ -148,14 +148,14 @@ findContinuingOutputs :: ScriptContext -> [Integer]
 findContinuingOutputs ctx | Just TxInInfo{txInInfoResolved=TxOut{txOutAddress}} <- findOwnInput ctx = findIndices (f txOutAddress) (txInfoOutputs $ scriptContextTxInfo ctx)
     where
         f addr TxOut{txOutAddress=otherAddress} = addr == otherAddress
-findContinuingOutputs _ = Builtins.error()
+findContinuingOutputs _ = Plutus.error()
 
 {-# INLINABLE getContinuingOutputs #-}
 getContinuingOutputs :: ScriptContext -> [TxOut]
 getContinuingOutputs ctx | Just TxInInfo{txInInfoResolved=TxOut{txOutAddress}} <- findOwnInput ctx = filter (f txOutAddress) (txInfoOutputs $ scriptContextTxInfo ctx)
     where
         f addr TxOut{txOutAddress=otherAddress} = addr == otherAddress
-getContinuingOutputs _ = Builtins.error()
+getContinuingOutputs _ = Plutus.error()
 
 {- Note [Hashes in validator scripts]
 
@@ -184,7 +184,7 @@ them from the correct types in Haskell, and for comparing them (in
 {-# INLINABLE scriptCurrencySymbol #-}
 -- | The 'CurrencySymbol' of a 'MintingPolicy'
 scriptCurrencySymbol :: MintingPolicy -> CurrencySymbol
-scriptCurrencySymbol scrpt = let (MintingPolicyHash hsh) = mintingPolicyHash scrpt in Value.currencySymbol hsh
+scriptCurrencySymbol scrpt = let (MintingPolicyHash hsh) = mintingPolicyHash scrpt in Value.currencySymbol $ Plutus.toHaskellByteString hsh
 
 {-# INLINABLE txSignedBy #-}
 -- | Check if a transaction was signed by the given public key.
@@ -202,7 +202,7 @@ pubKeyOutput TxOut{txOutAddress} = toPubKeyHash txOutAddress
 -- | Get the validator and datum hashes of the output that is curently being validated
 ownHashes :: ScriptContext -> (ValidatorHash, DatumHash)
 ownHashes (findOwnInput -> Just TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential s) _, txOutDatumHash=Just dh}}) = (s,dh)
-ownHashes _                                                        = Builtins.error ()
+ownHashes _                                                        = Plutus.error ()
 
 {-# INLINABLE ownHash #-}
 -- | Get the hash of the validator script that is currently being validated.
@@ -269,7 +269,7 @@ valueProduced = foldMap txOutValue . txInfoOutputs
 -- | The 'CurrencySymbol' of the current validator script.
 ownCurrencySymbol :: ScriptContext -> CurrencySymbol
 ownCurrencySymbol ScriptContext{scriptContextPurpose=Minting cs} = cs
-ownCurrencySymbol _                                              = Builtins.error ()
+ownCurrencySymbol _                                              = Plutus.error ()
 
 {-# INLINABLE spendsOutput #-}
 -- | Check if the pending transaction spends a specific transaction output

@@ -3,10 +3,12 @@ module PlutusTx.Eq (Eq(..), (/=)) where
 
 import           PlutusCore.Data
 
+import qualified Data.ByteString   as BS
 import           PlutusTx.Bool
 import qualified PlutusTx.Builtins as Builtins
 
 import           Prelude           hiding (Eq (..), not, (&&))
+import qualified Prelude           as Haskell
 
 {- HLINT ignore -}
 
@@ -28,7 +30,7 @@ instance Eq Integer where
     {-# INLINABLE (==) #-}
     (==) = Builtins.equalsInteger
 
-instance Eq Builtins.ByteString where
+instance Eq Builtins.BuiltinByteString where
     {-# INLINABLE (==) #-}
     (==) = Builtins.equalsByteString
 
@@ -39,6 +41,10 @@ instance Eq Builtins.BuiltinData where
 instance Eq Builtins.BuiltinString where
     {-# INLINABLE (==) #-}
     (==) = Builtins.equalsString
+
+instance Eq BS.ByteString where
+    {-# INLINABLE (==) #-}
+    (==) = (Haskell.==)
 
 instance Eq a => Eq [a] where
     {-# INLINABLE (==) #-}

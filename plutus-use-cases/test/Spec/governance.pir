@@ -9802,11 +9802,19 @@
                                         )
                                       )
                                       (termbind
+                                        (strict)
+                                        (vardecl
+                                          fIsDataVoid_ctoData (fun Void Data)
+                                        )
+                                        (lam v Void [ { absurd Data } v ])
+                                      )
+                                      (termbind
                                         (nonstrict)
                                         (vardecl fIsDataVoid [IsData Void])
                                         [
                                           [
-                                            { CConsIsData Void } { absurd Data }
+                                            { CConsIsData Void }
+                                            fIsDataVoid_ctoData
                                           ]
                                           fIsDataVoid_cfromData
                                         ]

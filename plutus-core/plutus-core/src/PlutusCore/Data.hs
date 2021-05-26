@@ -8,15 +8,15 @@
 
 module PlutusCore.Data (Data (..)) where
 
-import           Codec.CBOR.Decoding       (Decoder)
-import qualified Codec.CBOR.Decoding       as CBOR
-import qualified Codec.CBOR.Term           as CBOR
-import           Codec.Serialise           (Serialise (decode, encode))
-import           Codec.Serialise.Decoding  (decodeSequenceLenIndef, decodeSequenceLenN)
-import           Control.DeepSeq           (NFData)
+import           Codec.CBOR.Decoding          (Decoder)
+import qualified Codec.CBOR.Decoding          as CBOR
+import qualified Codec.CBOR.Term              as CBOR
+import           Codec.Serialise              (Serialise (decode, encode))
+import           Codec.Serialise.Decoding     (decodeSequenceLenIndef, decodeSequenceLenN)
+import           Control.DeepSeq              (NFData)
 import           Control.Monad.Except
-import           Data.Bifunctor            (bimap)
-import qualified Data.ByteString           as BS
+import           Data.Bifunctor               (bimap)
+import qualified Data.ByteString              as BS
 import           Data.Text.Prettyprint.Doc
 import           GHC.Generics
 import           Prelude

@@ -15,7 +15,6 @@ import           Control.Monad.Class.MonadTimer
 import           Crypto.Hash                                        (SHA256, hash)
 import           Data.Aeson                                         (FromJSON, ToJSON)
 import qualified Data.ByteArray                                     as BA
-import qualified Data.ByteString                                    as BS
 import qualified Data.ByteString.Lazy                               as BSL
 import           Data.Text.Prettyprint.Doc                          (Pretty)
 import           Data.Time.Units.Extra                              ()
@@ -40,12 +39,13 @@ import           Ouroboros.Network.Util.ShowProxy
 
 import           Ledger                                             (Block, OnChainTx (..), Tx (..), TxId (..))
 import           Ledger.Bytes                                       (LedgerBytes (..))
+import qualified PlutusTx.ByteString                                as PlutusTx
 
 -- | Tip of the block chain type (used by node protocols).
 type Tip = Block
 
 -- | The node protocols require a block header type.
-newtype BlockId = BlockId { getBlockId :: BS.ByteString }
+newtype BlockId = BlockId { getBlockId :: PlutusTx.ByteString }
   deriving (Eq, Ord, Generic)
   deriving anyclass (ToJSON, FromJSON)
   deriving newtype (Serialise, NoThunks)

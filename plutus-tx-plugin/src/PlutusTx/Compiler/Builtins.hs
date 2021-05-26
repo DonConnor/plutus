@@ -157,6 +157,7 @@ mkBuiltin = PIR.Builtin ()
 builtinNames :: [TH.Name]
 builtinNames = [
       ''BS.ByteString
+    , ''Builtins.BuiltinByteString
     , 'Builtins.concatenate
     , 'Builtins.takeByteString
     , 'Builtins.dropByteString
@@ -167,6 +168,7 @@ builtinNames = [
     , 'Builtins.greaterThanByteString
     , 'Builtins.emptyByteString
     , 'Builtins.decodeUtf8
+    , 'Builtins.stringToBuiltinByteString
 
     , 'Builtins.verifySignature
 
