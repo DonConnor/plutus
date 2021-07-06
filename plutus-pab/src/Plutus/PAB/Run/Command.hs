@@ -8,18 +8,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
-module Command
-    ( Command (..)
-    , ConfigCommand(..)
+module Plutus.PAB.Run.Command
+    ( ConfigCommand(..)
     , NoConfigCommand(..)
     , MockServerMode(..)
     ) where
 
-import           Cardano.Node.Types                      (MockServerMode (..))
-import qualified Data.Aeson                              as JSON
-import           GHC.Generics                            (Generic)
-import           Plutus.PAB.Effects.Contract.ContractExe (ContractExe)
-import           Wallet.Types                            (ContractInstanceId)
+import           Cardano.Node.Types (MockServerMode (..))
+import qualified Data.Aeson         as JSON
+import           GHC.Generics       (Generic)
+import           Wallet.Types       (ContractInstanceId)
 
 -- | A command for which a config.yaml file is required
 data ConfigCommand =
@@ -27,11 +25,11 @@ data ConfigCommand =
     | MockWallet -- ^ Run the mock wallet service
     | ChainIndex -- ^ Run the chain index service
     | Metadata -- ^ Run the mock meta-data service
-    | ForkCommands [ConfigCommand] -- ^ Fork  a list of commands
-    | InstallContract ContractExe -- ^ Install a contract
+    | ForkCommands [ConfigCommand] -- ^ Fork a list of commands
+    -- | InstallContract ContractExe -- ^ Install a contract
     | ContractState ContractInstanceId -- ^ Display the contract identified by 'ContractInstanceId'
     | ReportContractHistory ContractInstanceId -- ^ Get the history of the contract identified by 'UUID'
-    | ReportInstalledContracts -- ^ Get installed contracts
+    -- | ReportInstalledContracts -- ^ Get installed contracts
     | ReportActiveContracts -- ^ Get active contracts
     | PABWebserver -- ^ Run the PAB webserver
     deriving stock (Show, Eq, Generic)
@@ -45,12 +43,5 @@ data NoConfigCommand =
     | WriteDefaultConfig -- ^ Write default logging configuration
           { outputFile :: !FilePath -- ^ Path to write configuration to
           }
-    deriving stock (Show, Eq, Generic)
-    deriving anyclass JSON.ToJSON
-
--- | Commands that can be interpreted with 'runCliCommand'
-data Command
-    = WithoutConfig NoConfigCommand
-    | WithConfig ConfigCommand
     deriving stock (Show, Eq, Generic)
     deriving anyclass JSON.ToJSON

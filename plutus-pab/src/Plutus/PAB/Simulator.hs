@@ -198,10 +198,10 @@ type SimulatorEffectHandlers t = EffectHandlers t (SimulatorState t)
 mkSimulatorHandlers ::
     forall t.
     Pretty (Contract.ContractDef t)
-    => [Contract.ContractDef t] -- ^ Available contract definitions
-    -> SimulatorContractHandler t -- ^ Making calls to the contract (see 'Plutus.PAB.Effects.Contract.ContractTest.handleContractTest' for an example)
+    => -- [Contract.ContractDef t] -- ^ Available contract definitions
+       SimulatorContractHandler t -- ^ Making calls to the contract (see 'Plutus.PAB.Effects.Contract.ContractTest.handleContractTest' for an example)
     -> SimulatorEffectHandlers t
-mkSimulatorHandlers definitions handleContractEffect =
+mkSimulatorHandlers handleContractEffect =
     EffectHandlers
         { initialiseEnvironment =
             (,,)
@@ -213,10 +213,10 @@ mkSimulatorHandlers definitions handleContractEffect =
         , handleContractEffect
         , handleLogMessages = handleLogSimulator @t
         , handleServicesEffects = handleServicesSimulator @t
-        , handleContractDefinitionStoreEffect =
-            interpret $ \case
-                Contract.AddDefinition _ -> pure () -- not supported
-                Contract.GetDefinitions  -> pure definitions
+        -- , handleContractDefinitionStoreEffect =
+        --     interpret $ \case
+        --         Contract.AddDefinition _ -> pure () -- not supported
+        --         Contract.GetDefinitions  -> pure definitions
         , onStartup = do
             SimulatorState{_logMessages} <- Core.askUserEnv @t @(SimulatorState t)
             void $ liftIO $ forkIO (printLogMessages _logMessages)

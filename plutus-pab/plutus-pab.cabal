@@ -111,6 +111,11 @@ library
         Plutus.PAB.Monitoring.PABLogMsg
         Plutus.PAB.Monitoring.Util
         Plutus.PAB.ParseStringifiedJSON
+        Plutus.PAB.Run
+        Plutus.PAB.Run.Cli
+        Plutus.PAB.Run.Command
+        Plutus.PAB.Run.CommandParser
+        Plutus.PAB.Run.PSGenerator
         Plutus.PAB.Simulator
         Plutus.PAB.Timeout
         Plutus.PAB.Types
@@ -251,6 +256,7 @@ library
         , prettyprinter                >=1.1.0.1
         , primitive
         , process
+        , purescript-bridge
         , QuickCheck
         , quickcheck-instances
         , random
@@ -259,6 +265,7 @@ library
         , serialise
         , servant
         , servant-client
+        , servant-purescript
         , servant-server
         , servant-websockets
         , sqlite-simple
@@ -280,14 +287,11 @@ library
         , Win32-network
         , yaml
 
-executable plutus-pab
+executable plutus-pab-setup
     main-is:          Main.hs
     hs-source-dirs:   app
     other-modules:
-        Cli
-        Command
         CommandParser
-        PSGenerator
 
     default-language: Haskell2010
     ghc-options:
@@ -361,6 +365,36 @@ executable plutus-pab
         , uuid
         , yaml
 
+executable plutus-pab-examples
+    main-is:          Main.hs
+    hs-source-dirs:   examples
+    other-modules:
+        ContractExample
+        ContractExample.AtomicSwap
+        ContractExample.PayToWallet
+        ContractExample.WaitForTx
+    default-language: Haskell2010
+    ghc-options:
+        -threaded -rtsopts -with-rtsopts=-N -Wall -Wcompat
+        -Wincomplete-uni-patterns -Wincomplete-record-updates
+        -Wno-missing-import-lists -Wredundant-constraints -O0
+
+    build-depends:
+        , aeson
+        , base              >=4.9 && <5
+        , containers
+        , freer-extras
+        , freer-simple
+        , lens
+        , playground-common
+        , plutus-contract
+        , plutus-ledger
+        , plutus-pab
+        , plutus-use-cases
+        , prettyprinter
+        , row-types
+        , text
+
 executable plutus-uniswap
     main-is:          Main.hs
     hs-source-dirs:   examples/uniswap
@@ -384,101 +418,17 @@ executable plutus-uniswap
         , prettyprinter
         , text
 
-executable plutus-game
-    main-is:          Main.hs
-    hs-source-dirs:   examples/game-contract
-    other-modules:
-    default-language: Haskell2010
-    ghc-options:
-        -threaded -rtsopts -with-rtsopts=-N -Wall -Wcompat
-        -Wincomplete-uni-patterns -Wincomplete-record-updates
-        -Wno-missing-import-lists -Wredundant-constraints -O0
-
-    build-depends:
-        , base              >=4.9 && <5
-        , plutus-pab
-        , plutus-use-cases
-        , text
-
-executable plutus-currency
-    main-is:          Main.hs
-    hs-source-dirs:   examples/currency-contract
-    default-language: Haskell2010
-    ghc-options:
-        -threaded -rtsopts -with-rtsopts=-N -Wall -Wcompat
-        -Wincomplete-uni-patterns -Wincomplete-record-updates
-        -Wno-missing-import-lists -Wredundant-constraints -O0
-
-    build-depends:
-        , base              >=4.9 && <5
-        , plutus-pab
-        , plutus-use-cases
-        , text
-        , time-units -any
-
-executable plutus-atomic-swap
-    main-is:          Main.hs
-    hs-source-dirs:   examples/atomic-swap-contract
-    other-modules:    AtomicSwap
-    default-language: Haskell2010
-    ghc-options:
-        -threaded -rtsopts -with-rtsopts=-N -Wall -Wcompat
-        -Wincomplete-uni-patterns -Wincomplete-record-updates
-        -Wno-missing-import-lists -Wredundant-constraints -O0
-
-    build-depends:
-        -- base >=4.9 && <5,
-        -- text -any,
-        -- plutus-pab,
-        -- plutus-use-cases -any,
-        -- lens -any,
-        -- aeson -any,
-        -- playground-common -any,
-        -- plutus-ledger -any,
-        -- plutus-ledger-api -any,
-        -- plutus-contract -any,
-        -- time-units -any
-        , aeson
-        , base               >=4.9 && <5
-        , lens
-        , playground-common
-        , plutus-contract
-        , plutus-ledger
-        , plutus-ledger-api
-        , plutus-pab
-        , plutus-use-cases
-        , text
-
-executable plutus-pay-to-wallet
-    main-is:          Main.hs
-    other-modules:    PayToWallet
-    hs-source-dirs:   examples/pay-to-wallet-contract
-    default-language: Haskell2010
-    ghc-options:
-        -threaded -rtsopts -with-rtsopts=-N -Wall -Wcompat
-        -Wincomplete-uni-patterns -Wincomplete-record-updates
-        -Wno-missing-import-lists -Wredundant-constraints -O0
-
-    build-depends:
-        , aeson
-        , base               >=4.9 && <5
-        , playground-common
-        , plutus-contract
-        , plutus-ledger
-        , plutus-ledger-api
-        , plutus-pab
-        , text
-
 executable plutus-pab-test-psgenerator
     default-language: Haskell2010
     hs-source-dirs:
-        test-psgenerator test/full examples/pay-to-wallet-contract
-        examples/atomic-swap-contract
+        test-psgenerator
+        test/full
+        examples
 
     main-is:          TestPSGenerator.hs
     other-modules:
-        AtomicSwap
-        PayToWallet
+        ContractExample.AtomicSwap
+        ContractExample.PayToWallet
         Plutus.PAB.Effects.Contract.ContractTest
         Plutus.PAB.Simulator.Test
 
@@ -558,17 +508,16 @@ test-suite plutus-pab-test-light
 test-suite plutus-pab-test-full
     default-language: Haskell2010
     hs-source-dirs:
-        test/full examples/pay-to-wallet-contract
-        examples/atomic-swap-contract
+        test/full
+        examples
 
     type:             exitcode-stdio-1.0
     main-is:          Spec.hs
     other-modules:
-        AtomicSwap
-        PayToWallet
+        ContractExample.AtomicSwap
+        ContractExample.PayToWallet
         Plutus.PAB.CoreSpec
         Plutus.PAB.Effects.Contract.ContractTest
-        Plutus.PAB.Events.ContractSpec
         Plutus.PAB.Simulator.Test
 
     build-depends:
@@ -602,39 +551,6 @@ test-suite plutus-pab-test-full
         , tasty-smallcheck
         , text
         , transformers
-
-executable prism-mirror
-    import:           lang
-    main-is:          Main.hs
-    hs-source-dirs:   examples/prism/mirror
-    default-language: Haskell2010
-    build-depends:
-        , base              >=4.9 && <5
-        , plutus-contract
-        , plutus-pab
-        , plutus-use-cases
-
-executable prism-unlock-sto
-    import:           lang
-    main-is:          Main.hs
-    hs-source-dirs:   examples/prism/unlock-sto
-    default-language: Haskell2010
-    build-depends:
-        , base              >=4.9 && <5
-        , plutus-contract
-        , plutus-pab
-        , plutus-use-cases
-
-executable prism-unlock-exchange
-    import:           lang
-    main-is:          Main.hs
-    hs-source-dirs:   examples/prism/unlock-exchange
-    default-language: Haskell2010
-    build-depends:
-        , base              >=4.9 && <5
-        , plutus-contract
-        , plutus-pab
-        , plutus-use-cases
 
 executable tx-inject
     import:           lang

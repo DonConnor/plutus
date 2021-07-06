@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts   #-}
@@ -8,13 +7,10 @@
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE TypeOperators      #-}
 module Main(main, marloweTest) where
 
 import           Control.Monad                       (guard, void)
-import           Control.Monad.Freer                 (Eff, Member, interpret, type (~>))
-import           Control.Monad.Freer.Error           (Error)
-import           Control.Monad.Freer.Extras.Log      (LogMsg)
+import           Control.Monad.Freer                 (interpret)
 import           Control.Monad.IO.Class              (MonadIO (..))
 import           Data.Aeson                          (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import qualified Data.Aeson                          as JSON
@@ -31,13 +27,10 @@ import qualified Language.Marlowe.Semantics          as Marlowe
 import           Language.Marlowe.Util               (ada)
 import           Ledger                              (PubKeyHash, Slot, pubKeyHash)
 import qualified Ledger.Value                        as Val
-import           Plutus.PAB.Effects.Contract         (ContractEffect (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, SomeBuiltin (..))
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler (contractHandler), SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
-import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg)
 import           Plutus.PAB.Simulator                (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator                as Simulator
-import           Plutus.PAB.Types                    (PABError (..))
 import qualified Plutus.PAB.Webserver.Server         as PAB.Server
 import qualified PlutusTx.AssocMap                   as AssocMap
 import           Text.Read                           (readMaybe)
@@ -62,7 +55,7 @@ marloweTest = void $ Simulator.runSimulationWith handlers $ do
 
     void $ Simulator.waitNSlots 10
 
-    let args = let h = (pubKeyHash newPubKey) in createArgs h h
+    let args = let h = pubKeyHash newPubKey in createArgs h h
     void $ Simulator.callEndpointOnInstance marloweContractId "create" args
 
     followerId <- Simulator.activateContract newWallet MarloweFollower
@@ -128,12 +121,7 @@ instance FromJSON Marlowe where
 
 instance Pretty Marlowe where
     pretty = viaShow
-handleMarloweContract ::
-    ( Member (Error PABError) effs
-    , Member (LogMsg (PABMultiAgentMsg (Builtin Marlowe))) effs
-    )
-    => ContractEffect (Builtin Marlowe)
-    ~> Eff effs
+handleMarloweContract :: BuiltinHandler Marlowe
 handleMarloweContract = Builtin.handleBuiltin getSchema getContract where
     getSchema = const [] -- TODO: replace with proper schemas using Builtin.endpointsToSchemas (missing some instances currently)
     getContract = \case
@@ -143,5 +131,5 @@ handleMarloweContract = Builtin.handleBuiltin getSchema getContract where
 
 handlers :: SimulatorEffectHandlers (Builtin Marlowe)
 handlers =
-    Simulator.mkSimulatorHandlers @(Builtin Marlowe) [MarloweApp]
-    $ interpret handleMarloweContract
+    Simulator.mkSimulatorHandlers @(Builtin Marlowe)
+    $ interpret (contractHandler handleMarloweContract)

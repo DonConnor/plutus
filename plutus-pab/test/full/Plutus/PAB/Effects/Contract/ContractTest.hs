@@ -9,7 +9,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
 {-
 
 "inline" contracts from plutus-use-cases for testing
@@ -29,15 +28,15 @@ import           Data.Row
 import           Data.Text.Prettyprint.Doc
 import           GHC.Generics                        (Generic)
 
-import qualified AtomicSwap                          as Contracts.AtomicSwap
+import qualified ContractExample.AtomicSwap          as Contracts.AtomicSwap
+import qualified ContractExample.PayToWallet         as Contracts.PayToWallet
 import           Data.Text.Extras                    (tshow)
-import qualified PayToWallet                         as Contracts.PayToWallet
 import           Playground.Types                    (FunctionSchema)
 import qualified Plutus.Contracts.Currency           as Contracts.Currency
 import qualified Plutus.Contracts.GameStateMachine   as Contracts.GameStateMachine
 import qualified Plutus.Contracts.PingPong           as Contracts.PingPong
 import           Plutus.PAB.Effects.Contract         (ContractEffect (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, SomeBuiltin (..))
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, BuiltinHandler, SomeBuiltin (..))
 import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg)
 import           Plutus.PAB.Types                    (PABError (..))
@@ -51,21 +50,16 @@ instance Pretty TestContracts where
     pretty = viaShow
 
 -- | A mock/test handler for 'ContractEffect'. Uses 'Plutus.PAB.Effects.Contract.Builtin'.
-handleContractTest ::
-    ( Member (Error PABError) effs
-    , Member (LogMsg (PABMultiAgentMsg (Builtin TestContracts))) effs
-    )
-    => ContractEffect (Builtin TestContracts)
-    ~> Eff effs
+handleContractTest :: BuiltinHandler TestContracts
 handleContractTest = Builtin.handleBuiltin getSchema getContract
 
 getSchema :: TestContracts -> [FunctionSchema FormSchema]
 getSchema = \case
-    GameStateMachine -> Builtin.endpointsToSchemas @(Contracts.GameStateMachine.GameStateMachineSchema)
-    Currency         -> Builtin.endpointsToSchemas @(Contracts.Currency.CurrencySchema)
-    AtomicSwap       -> Builtin.endpointsToSchemas @(Contracts.AtomicSwap.AtomicSwapSchema)
-    PayToWallet      -> Builtin.endpointsToSchemas @(Contracts.PayToWallet.PayToWalletSchema)
-    PingPong         -> Builtin.endpointsToSchemas @(Contracts.PingPong.PingPongSchema)
+    GameStateMachine -> Builtin.endpointsToSchemas @Contracts.GameStateMachine.GameStateMachineSchema
+    Currency         -> Builtin.endpointsToSchemas @Contracts.Currency.CurrencySchema
+    AtomicSwap       -> Builtin.endpointsToSchemas @Contracts.AtomicSwap.AtomicSwapSchema
+    PayToWallet      -> Builtin.endpointsToSchemas @Contracts.PayToWallet.PayToWalletSchema
+    PingPong         -> Builtin.endpointsToSchemas @Contracts.PingPong.PingPongSchema
 
 getContract :: TestContracts -> SomeBuiltin
 getContract = \case

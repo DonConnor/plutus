@@ -1,7 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -42,7 +40,6 @@ module Plutus.PAB.Core
     , runPAB
     , PABEnvironment(appEnv)
     -- * Contracts and instances
-    , installContract
     , reportContractState
     , activateContract
     , callEndpointOnInstance
@@ -110,8 +107,7 @@ import qualified Plutus.PAB.Core.ContractInstance        as ContractInstance
 import           Plutus.PAB.Core.ContractInstance.STM    (Activity (Active), BlockchainEnv, InstancesState,
                                                           OpenEndpoint (..))
 import qualified Plutus.PAB.Core.ContractInstance.STM    as Instances
-import           Plutus.PAB.Effects.Contract             (ContractDefinitionStore, ContractEffect, ContractStore,
-                                                          PABContract (..), addDefinition, getState)
+import           Plutus.PAB.Effects.Contract             (ContractEffect, ContractStore, PABContract (..), getState)
 import qualified Plutus.PAB.Effects.Contract             as Contract
 import qualified Plutus.PAB.Effects.ContractRuntime      as ContractRuntime
 import           Plutus.PAB.Effects.TimeEffect           (TimeEffect (..), systemTime)
@@ -136,7 +132,6 @@ import           Wallet.Types                            (ContractInstanceId, En
 type PABEffects t env =
     '[ ContractStore t
      , ContractEffect t
-     , ContractDefinitionStore t
      , LogMsg (PABMultiAgentMsg t)
      , TimeEffect
      , Reader (PABEnvironment t env)
@@ -153,17 +148,15 @@ newtype PABRunner t env = PABRunner { runPABAction :: forall a. PABAction t env 
 -- | Get a 'PABRunner' that uses the current environment.
 pabRunner :: forall t env. PABAction t env (PABRunner t env)
 pabRunner = do
-    h@PABEnvironment{effectHandlers=EffectHandlers{handleLogMessages, handleContractStoreEffect, handleContractEffect, handleContractDefinitionStoreEffect}} <- ask @(PABEnvironment t env)
+    h@PABEnvironment{effectHandlers=EffectHandlers{handleLogMessages, handleContractStoreEffect, handleContractEffect}} <- ask @(PABEnvironment t env)
     pure $ PABRunner $ \action -> do
         runM
             $ runError
             $ runReader h
             $ interpret (handleTimeEffect @t @env)
             $ handleLogMessages
-            $ handleContractDefinitionStoreEffect
             $ handleContractEffect
-            $ handleContractStoreEffect
-            $ action
+            $ handleContractStoreEffect action
 
 -- | Shared data that is needed by all PAB threads.
 data PABEnvironment t env =
@@ -187,11 +180,11 @@ runPAB ::
     -> PABAction t env a
     -> IO (Either PABError a)
 runPAB endpointTimeout effectHandlers action = runM $ runError $ do
-    let EffectHandlers{initialiseEnvironment, onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect, handleContractDefinitionStoreEffect} = effectHandlers
+    let EffectHandlers{initialiseEnvironment, onStartup, onShutdown, handleLogMessages, handleContractStoreEffect, handleContractEffect} = effectHandlers
     (instancesState, blockchainEnv, appEnv) <- initialiseEnvironment
     let env = PABEnvironment{instancesState, blockchainEnv, appEnv, effectHandlers, endpointTimeout}
 
-    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractDefinitionStoreEffect $ handleContractEffect $ handleContractStoreEffect $ do
+    runReader env $ interpret (handleTimeEffect @t @env) $ handleLogMessages $ handleContractEffect $ handleContractStoreEffect $ do
         onStartup
         result <- action
         onShutdown
@@ -324,8 +317,7 @@ handleAgentThread wallet action = do
         $ handleServicesEffects wallet
         $ handleContractStoreEffect
         $ handleContractEffect
-        $ (handleContractRuntimeMsg @t . reinterpret @ContractRuntimeEffect @(LogMsg ContractRuntime.ContractRuntimeMsg) ContractRuntime.handleContractRuntime)
-        $ action'
+        $ (handleContractRuntimeMsg @t . reinterpret @ContractRuntimeEffect @(LogMsg ContractRuntime.ContractRuntimeMsg) ContractRuntime.handleContractRuntime) action'
 
 -- | Effect handlers for running the PAB.
 data EffectHandlers t env =
@@ -370,16 +362,16 @@ data EffectHandlers t env =
             => Eff (ContractEffect t ': effs)
             ~> Eff effs
 
-        -- | Handle the 'ContractDefinitionStore' effect
-        , handleContractDefinitionStoreEffect :: forall effs.
-            ( Member (Reader (PABEnvironment t env)) effs
-            , Member (Error PABError) effs
-            , Member TimeEffect effs
-            , Member (LogMsg (PABMultiAgentMsg t)) effs
-            , LastMember IO effs
-            )
-            => Eff (ContractDefinitionStore t ': effs)
-            ~> Eff effs
+        -- -- | Handle the 'ContractDefinitionStore' effect
+        -- , handleContractDefinitionStoreEffect :: forall effs.
+        --     ( Member (Reader (PABEnvironment t env)) effs
+        --     , Member (Error PABError) effs
+        --     , Member TimeEffect effs
+        --     , Member (LogMsg (PABMultiAgentMsg t)) effs
+        --     , LastMember IO effs
+        --     )
+        --     => Eff (ContractDefinitionStore t ': effs)
+        --     ~> Eff effs
 
         -- | Handle effects that serve requests to external services managed by the PAB
         --   Runs in the context of a particular wallet.
@@ -400,16 +392,6 @@ data EffectHandlers t env =
         -- | Action to run on shutdown
         , onShutdown :: PABAction t env ()
         }
-
--- | Install a contract by saving its definition in the contract definition
---   store.
-installContract ::
-    forall t effs.
-    ( Member (ContractDefinitionStore t) effs
-    )
-    => (ContractDef t)
-    -> Eff effs ()
-installContract contractHandle = addDefinition @t contractHandle
 
 -- | Report the state of a running contract.
 reportContractState ::
@@ -455,9 +437,7 @@ waitForState extract instanceId = do
     stm <- observableState instanceId
     liftIO $ STM.atomically $ do
         state <- stm
-        case extract state of
-            Nothing -> STM.retry
-            Just k  -> pure k
+        maybe STM.retry pure (extract state)
 
 -- | Wait for the transaction to be confirmed on the blockchain.
 waitForTxConfirmed :: forall t env. TxId -> PABAction t env TxConfirmed

@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module PSGenerator
+module Plutus.PAB.Run.PSGenerator
     ( generate
     , pabBridge
     , pabTypes
@@ -34,7 +34,7 @@ import qualified PSGenerator.Common
 import           Plutus.Contract.Checkpoint                 (CheckpointKey, CheckpointStore, CheckpointStoreItem)
 import           Plutus.Contract.Effects                    (TxConfirmed)
 import           Plutus.Contract.Resumable                  (Responses)
-import           Plutus.PAB.Effects.Contract.ContractExe    (ContractExe)
+import           Plutus.PAB.Effects.Contract.Builtin        (Builtin)
 import           Plutus.PAB.Events.ContractInstanceState    (PartiallyDecodedResponse)
 import qualified Plutus.PAB.Webserver.API                   as API
 import           Plutus.PAB.Webserver.Types                 (ChainReport, CombinedWSStreamToClient,
@@ -85,7 +85,7 @@ pabTypes =
     PSGenerator.Common.ledgerTypes <>
     PSGenerator.Common.playgroundTypes <>
     PSGenerator.Common.walletTypes <>
-    [ (equal <*> (genericShow <*> mkSumType)) (Proxy @ContractExe)
+    [ (equal <*> (genericShow <*> mkSumType)) (Proxy @(Builtin A))
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @(FullReport A))
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @ChainReport)
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @(ContractReport A))
@@ -112,7 +112,7 @@ pabTypes =
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @HashFunction)
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @(AnnotatedSignature A))
 
-    -- * Web API types
+    -- Web API types
     , (equal <*> (genericShow <*> mkSumType)) (Proxy @(ContractActivationArgs A))
     , (genericShow <*> mkSumType) (Proxy @(ContractInstanceClientState A))
     , (genericShow <*> mkSumType) (Proxy @InstanceStatusToClient)
@@ -133,10 +133,27 @@ generate outputDir = do
         mySettings
         outputDir
         pabBridgeProxy
-        (Proxy @(API.API ContractExe :<|> API.NewAPI ContractExe Text.Text :<|> (API.WalletProxy Text.Text)))
+        (Proxy @(API.API (Builtin A) :<|> API.NewAPI (Builtin A) Text.Text :<|> API.WalletProxy Text.Text))
     writePSTypesWith
         (genForeign (ForeignOptions {unwrapSingleConstructors = True}))
         outputDir
         (buildBridge pabBridge)
         pabTypes
     putStrLn $ "Done: " <> outputDir
+
+-- -- Before, try to use (Builtin A)
+-- generateAPIModule :: Proxy a => FilePath -> IO ()
+-- generateAPIModule outputDir = do
+--     writeAPIModuleWithSettings
+--         mySettings
+--         outputDir
+--         pabBridgeProxy
+--         (Proxy @(API.API (Builtin A) :<|> API.NewAPI ContractExe Text.Text :<|> API.WalletProxy Text.Text))
+
+-- -- Expose in Main.hs
+-- generate writePSTypesWith
+--         (genForeign (ForeignOptions {unwrapSingleConstructors = True}))
+--         outputDir
+--         (buildBridge pabBridge)
+--         pabTypes
+--     putStrLn $ "Done: " <> outputDir

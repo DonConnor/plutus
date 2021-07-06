@@ -32,9 +32,9 @@ module Plutus.PAB.Effects.Contract(
     , putStartInstance
     , putStopInstance
     -- * Storing and retrieving definitions of contracts
-    , ContractDefinitionStore(..)
-    , addDefinition
-    , getDefinitions
+    -- , ContractDefinitionStore(..)
+    -- , addDefinition
+    -- , getDefinitions
     ) where
 
 import           Control.Monad.Freer        (Eff, Member, send)
@@ -191,26 +191,26 @@ getDefinition ::
     -> Eff effs (Maybe (ContractActivationArgs (ContractDef t)))
 getDefinition i = Map.lookup i <$> (getActiveContracts @t)
 
--- | Storing and retrieving definitions of contracts.
---   (Not all 't's support this)
-data ContractDefinitionStore t r where
-    AddDefinition :: ContractDef t -> ContractDefinitionStore t ()
-    GetDefinitions :: ContractDefinitionStore t [ContractDef t]
+-- -- | Storing and retrieving definitions of contracts.
+-- --   (Not all 't's support this)
+-- data ContractDefinitionStore t r where
+--     AddDefinition :: ContractDef t -> ContractDefinitionStore t ()
+--     GetDefinitions :: ContractDefinitionStore t [ContractDef t]
 
-addDefinition ::
-    forall t effs.
-    ( Member (ContractDefinitionStore t) effs
-    )
-    => ContractDef t
-    -> Eff effs ()
-addDefinition def =
-    let command :: ContractDefinitionStore t ()
-        command = AddDefinition def
-    in send command
+-- addDefinition ::
+--     forall t effs.
+--     ( Member (ContractDefinitionStore t) effs
+--     )
+--     => ContractDef t
+--     -> Eff effs ()
+-- addDefinition def =
+--     let command :: ContractDefinitionStore t ()
+--         command = AddDefinition def
+--     in send command
 
-getDefinitions ::
-    forall t effs.
-    ( Member (ContractDefinitionStore t) effs
-    )
-    => Eff effs [ContractDef t]
-getDefinitions = send @(ContractDefinitionStore t) GetDefinitions
+-- getDefinitions ::
+--     forall t effs.
+--     ( Member (ContractDefinitionStore t) effs
+--     )
+--     => Eff effs [ContractDef t]
+-- getDefinitions = send @(ContractDefinitionStore t) GetDefinitions

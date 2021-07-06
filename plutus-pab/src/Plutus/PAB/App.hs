@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -13,7 +12,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeOperators         #-}
+
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
 module Plutus.PAB.App(
@@ -53,12 +52,12 @@ import           Plutus.PAB.Core                                (EffectHandlers 
 import qualified Plutus.PAB.Core                                as Core
 import qualified Plutus.PAB.Core.ContractInstance.BlockchainEnv as BlockchainEnv
 import           Plutus.PAB.Core.ContractInstance.STM           as Instances
-import qualified Plutus.PAB.Db.Beam.ContractDefinitionStore     as BeamEff
 import qualified Plutus.PAB.Db.Beam.ContractStore               as BeamEff
 import           Plutus.PAB.Db.Memory.ContractStore             (InMemInstances, initialInMemInstances)
 -- TODO: Use this or delete it
+import           Data.Aeson                                     (FromJSON, ToJSON)
 import qualified Plutus.PAB.Db.Memory.ContractStore             as InMem
-import           Plutus.PAB.Effects.Contract.ContractExe        (ContractExe (..), handleContractEffectContractExe)
+import           Plutus.PAB.Effects.Contract.Builtin            (Builtin, BuiltinHandler (..))
 import           Plutus.PAB.Effects.DbStore                     (checkedSqliteDb, handleDbStore)
 import           Plutus.PAB.Monitoring.Monitoring               (handleLogMsgTrace)
 import           Plutus.PAB.Monitoring.PABLogMsg                (PABLogMsg (..), PABMultiAgentMsg (UserLog))
@@ -70,7 +69,7 @@ import           Servant.Client                                 (ClientEnv, mkCl
 
 ------------------------------------------------------------
 
-data AppEnv =
+data AppEnv a =
     AppEnv
         { dbConnection          :: Sqlite.Connection
         , walletClientEnv       :: ClientEnv
@@ -79,17 +78,28 @@ data AppEnv =
         , txSendHandle          :: Client.TxSendHandle
         , chainSyncHandle       :: Client.ChainSyncHandle
         , appConfig             :: Config
-        , appTrace              :: Trace IO (PABLogMsg ContractExe)
-        , appInMemContractStore :: InMemInstances ContractExe
+        , appTrace              :: Trace IO (PABLogMsg (Builtin a))
+        , appInMemContractStore :: InMemInstances (Builtin a)
         }
 
-appEffectHandlers :: StorageBackend -> Config -> Trace IO (PABLogMsg ContractExe) -> EffectHandlers ContractExe AppEnv
-appEffectHandlers storageBackend config trace =
+appEffectHandlers
+  :: forall a.
+  ( --Member (LogMsg Plutus.PAB.Monitoring.PABLogMsg.ContractExeLogMsg) effs
+  -- , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
+    FromJSON a
+  , ToJSON a
+  )
+  => StorageBackend
+  -> Config
+  -> Trace IO (PABLogMsg (Builtin a))
+  -> BuiltinHandler a -- (ContractEffect (Builtin a) ~> Eff effs)
+  -> EffectHandlers (Builtin a) (AppEnv a)
+appEffectHandlers storageBackend config trace BuiltinHandler{contractHandler} =
     EffectHandlers
         { initialiseEnvironment = do
             env <- liftIO $ mkEnv trace config
             let Config{nodeServerConfig=MockServerConfig{mscSocketPath, mscSlotConfig}} = config
-            instancesState <- liftIO $ STM.atomically $ Instances.emptyInstancesState
+            instancesState <- liftIO $ STM.atomically Instances.emptyInstancesState
             blockchainEnv <- liftIO $ BlockchainEnv.startNodeClient mscSocketPath mscSlotConfig
             pure (instancesState, blockchainEnv, env)
 
@@ -99,54 +109,54 @@ appEffectHandlers storageBackend config trace =
 
         , handleContractEffect =
             interpret (handleLogMsgTrace trace)
-            . reinterpret (mapLog @_ @(PABLogMsg ContractExe) SContractExeLogMsg)
-            . reinterpret (handleContractEffectContractExe @IO)
+            . reinterpret (mapLog @_ @(PABLogMsg (Builtin a)) SContractExeLogMsg)
+            . reinterpret contractHandler
 
         , handleContractStoreEffect =
           case storageBackend of
             InMemoryBackend ->
-              interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-              . interpret (Core.handleMappedReader @AppEnv appInMemContractStore)
+              interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+              . interpret (Core.handleMappedReader @(AppEnv a) appInMemContractStore)
               . reinterpret2 InMem.handleContractStore
 
             BeamSqliteBackend ->
               interpret (handleLogMsgTrace trace)
-              . reinterpret (mapLog @_ @(PABLogMsg ContractExe) SMultiAgent)
-              . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-              . interpret (Core.handleMappedReader @AppEnv dbConnection)
+              . reinterpret (mapLog @_ @(PABLogMsg (Builtin a)) SMultiAgent)
+              . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+              . interpret (Core.handleMappedReader @(AppEnv a) dbConnection)
               . interpret (handleDbStore trace)
               . reinterpretN @'[_, _, _, _] BeamEff.handleContractStore
 
-        , handleContractDefinitionStoreEffect =
-            interpret (handleLogMsgTrace trace)
-            . reinterpret (mapLog @_ @(PABLogMsg ContractExe) SMultiAgent)
-           .  interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . interpret (Core.handleMappedReader @AppEnv dbConnection)
-            . interpret (handleDbStore trace)
-            . reinterpretN @'[_, _, _, _] BeamEff.handleContractDefinitionStore
+        -- , handleContractDefinitionStoreEffect =
+        --     interpret (handleLogMsgTrace trace)
+        --     . reinterpret (mapLog @_ @(PABLogMsg (Builtin a)) SMultiAgent)
+        --     . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+        --     . interpret (Core.handleMappedReader @(AppEnv a) dbConnection)
+        --     . interpret (handleDbStore trace)
+        --     . reinterpretN @'[_, _, _, _] BeamEff.handleContractDefinitionStore
 
         , handleServicesEffects = \wallet ->
             -- handle 'NodeClientEffect'
             flip handleError (throwError . NodeClientError)
-            . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . reinterpret (Core.handleMappedReader @AppEnv @Client.ChainSyncHandle chainSyncHandle)
-            . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . reinterpret (Core.handleMappedReader @AppEnv @Client.TxSendHandle txSendHandle)
-            . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . reinterpret (Core.handleMappedReader @AppEnv @ClientEnv nodeClientEnv)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . reinterpret (Core.handleMappedReader @(AppEnv a) @Client.ChainSyncHandle chainSyncHandle)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . reinterpret (Core.handleMappedReader @(AppEnv a) @Client.TxSendHandle txSendHandle)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . reinterpret (Core.handleMappedReader @(AppEnv a) @ClientEnv nodeClientEnv)
             . reinterpretN @'[_, _, _, _] (handleNodeClientClient @IO)
 
             -- handle 'ChainIndexEffect'
             . flip handleError (throwError . ChainIndexError)
-            . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . reinterpret (Core.handleMappedReader @AppEnv @ClientEnv chainIndexEnv)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . reinterpret (Core.handleMappedReader @(AppEnv a) @ClientEnv chainIndexEnv)
             . reinterpret2 (handleChainIndexClient @IO)
 
             -- handle 'WalletEffect'
             . flip handleError (throwError . WalletClientError)
             . flip handleError (throwError . WalletError)
-            . interpret (Core.handleUserEnvReader @ContractExe @AppEnv)
-            . reinterpret (Core.handleMappedReader @AppEnv @ClientEnv walletClientEnv)
+            . interpret (Core.handleUserEnvReader @(Builtin a) @(AppEnv a))
+            . reinterpret (Core.handleMappedReader @(AppEnv a) @ClientEnv walletClientEnv)
             . reinterpretN @'[_, _, _] (WalletClient.handleWalletClient @IO wallet)
 
         , onStartup = pure ()
@@ -155,20 +165,24 @@ appEffectHandlers storageBackend config trace =
         }
 
 runApp ::
-    forall a.
-    StorageBackend
-    -> Trace IO (PABLogMsg ContractExe) -- ^ Top-level tracer
+    forall a b.
+    ( FromJSON a
+    , ToJSON a
+    )
+    => StorageBackend
+    -> Trace IO (PABLogMsg (Builtin a)) -- ^ Top-level tracer
+    -> BuiltinHandler a -- (ContractEffect (Builtin a) ~> Eff effs)
     -> Config -- ^ Client configuration
-    -> App a -- ^ Action
-    -> IO (Either PABError a)
-runApp storageBackend trace config@Config{endpointTimeout} = Core.runPAB (Timeout endpointTimeout) (appEffectHandlers storageBackend config trace)
+    -> App a b -- ^ Action
+    -> IO (Either PABError b)
+runApp storageBackend trace contractHandler config@Config{endpointTimeout} = Core.runPAB (Timeout endpointTimeout) (appEffectHandlers storageBackend config trace contractHandler)
 
-type App a = PABAction ContractExe AppEnv a
+type App a b = PABAction (Builtin a) (AppEnv a) b
 
 data StorageBackend = BeamSqliteBackend | InMemoryBackend
   deriving (Eq, Ord, Show)
 
-mkEnv :: Trace IO (PABLogMsg ContractExe) -> Config -> IO AppEnv
+mkEnv :: Trace IO (PABLogMsg (Builtin a)) -> Config -> IO (AppEnv a)
 mkEnv appTrace appConfig@Config { dbConfig
              , nodeServerConfig =  MockServerConfig{mscBaseUrl, mscSocketPath, mscSlotConfig}
              , walletServerConfig
@@ -194,7 +208,7 @@ logDebugString :: Trace IO (PABLogMsg t) -> Text -> IO ()
 logDebugString trace = logDebug trace . SMultiAgent . UserLog
 
 -- | Initialize/update the database to hold our effects.
-migrate :: Trace IO (PABLogMsg ContractExe) -> DbConfig -> IO ()
+migrate :: Trace IO (PABLogMsg (Builtin a)) -> DbConfig -> IO ()
 migrate trace config = do
     connection <- dbConnect trace config
     logDebugString trace "Running beam migration"
@@ -202,14 +216,14 @@ migrate trace config = do
 
 runBeamMigration
   ::
-  Trace IO (PABLogMsg ContractExe)
+  Trace IO (PABLogMsg (Builtin a))
   -> Sqlite.Connection
   -> IO ()
 runBeamMigration trace conn = Sqlite.runBeamSqliteDebug (logDebugString trace . pack) conn $ do
   autoMigrate Sqlite.migrationBackend checkedSqliteDb
 
 -- | Connect to the database.
-dbConnect :: Trace IO (PABLogMsg ContractExe) -> DbConfig -> IO Sqlite.Connection
+dbConnect :: Trace IO (PABLogMsg (Builtin a)) -> DbConfig -> IO Sqlite.Connection
 dbConnect trace DbConfig {dbConfigFile} = do
   logDebugString trace $ "Connecting to DB: " <> dbConfigFile
   open (unpack dbConfigFile)

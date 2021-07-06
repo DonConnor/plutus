@@ -1,9 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds     #-}
 {-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE DerivingStrategies  #-}
+{-# LANGUAGE EmptyDataDeriving   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
@@ -23,6 +22,7 @@ module Plutus.PAB.Effects.Contract.Builtin(
     Builtin
     , ContractConstraints
     , SomeBuiltin(..)
+    , BuiltinHandler(..)
     , handleBuiltin
     -- * Extracting schemas from contracts
     , type (.\\)
@@ -48,6 +48,7 @@ import           Plutus.PAB.Effects.Contract                      (ContractEffec
 import           Plutus.PAB.Monitoring.PABLogMsg                  (PABMultiAgentMsg (..))
 import           Plutus.PAB.Types                                 (PABError (..))
 
+import           GHC.Generics                                     (Generic)
 import           Playground.Schema                                (endpointsToSchemas)
 import           Playground.Types                                 (FunctionSchema)
 import           Plutus.Contract                                  (Contract, ContractInstanceId, EmptySchema)
@@ -62,7 +63,10 @@ import           Schema                                           (FormSchema)
 
 -- | Contracts that are built into the PAB (ie. compiled with it) and receive
 --   an initial value of type 'a'.
-data Builtin a
+--
+-- We have a dummy constructor so that we can convert this datatype in
+-- Purescript with '(equal <*> (genericShow <*> mkSumType)) (Proxy @(Builtin A))'.
+data Builtin a = Builtin deriving (Eq, Generic)
 
 type ContractConstraints w schema error =
     ( Monoid w
@@ -93,18 +97,25 @@ instance PABContract (Builtin a) where
     type State (Builtin a) = SomeBuiltinState a
     serialisableState _ = getResponse
 
+-- | Defined in order to prevent type errors like: "Couldn't match type 'effs'
+-- with 'effs1'".
+newtype BuiltinHandler a = BuiltinHandler
+    { contractHandler :: forall effs.
+                         ( Member (Error PABError) effs
+                         , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
+                         -- , Member (LogMsg (PABLogMsg (Builtin a))) effs
+                         )
+                      => ContractEffect (Builtin a) ~> Eff effs
+    }
+
 -- | Handle the 'ContractEffect' for a builtin contract type with parameter
 --   @a@.
 handleBuiltin ::
-    forall a effs.
-    ( Member (Error PABError) effs
-    , Member (LogMsg (PABMultiAgentMsg (Builtin a))) effs
-    )
-    => (a -> [FunctionSchema FormSchema]) -- ^ The schema (construct with 'endpointsToSchemas'. Can also be an empty list)
+    forall a.
+    (a -> [FunctionSchema FormSchema]) -- ^ The schema (construct with 'endpointsToSchemas'. Can also be an empty list)
     -> (a -> SomeBuiltin) -- ^ The actual contract
-    -> ContractEffect (Builtin a)
-    ~> Eff effs
-handleBuiltin mkSchema initialise = \case
+    -> BuiltinHandler a
+handleBuiltin mkSchema initialise = BuiltinHandler $ \case
     InitialState i c           -> case initialise c of SomeBuiltin c' -> initBuiltin i c'
     UpdateContract i _ state p -> case state of SomeBuiltinState s w -> updateBuiltin i s w p
     ExportSchema a             -> pure $ mkSchema a

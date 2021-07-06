@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeOperators       #-}
 {-
@@ -66,8 +67,7 @@ import           Plutus.PAB.Events.ContractInstanceState (fromResp)
 import           Plutus.PAB.Types                        (PABError (OtherError))
 import           Plutus.PAB.Webserver.API                ()
 import           Plutus.PAB.Webserver.Types              (CombinedWSStreamToClient (..), CombinedWSStreamToServer (..),
-                                                          ContractReport (..), ContractSignatureResponse (..),
-                                                          InstanceStatusToClient (..))
+                                                          ContractReport (..), InstanceStatusToClient (..))
 import           Servant                                 ((:<|>) ((:<|>)))
 import           Wallet.Emulator.Wallet                  (Wallet (..))
 import qualified Wallet.Emulator.Wallet                  as Wallet
@@ -75,14 +75,17 @@ import           Wallet.Types                            (ContractInstanceId (..
 
 getContractReport :: forall t env. Contract.PABContract t => PABAction t env (ContractReport (Contract.ContractDef t))
 getContractReport = do
-    installedContracts <- Contract.getDefinitions @t
+    -- installedContracts <- Contract.getDefinitions @t
+    -- activeContractIDs <- fmap fst . Map.toList <$> Contract.getActiveContracts @t
+    -- crAvailableContracts <-
+    --     traverse
+    --         (\t -> ContractSignatureResponse t <$> Contract.exportSchema @t t)
+    --         installedContracts
+    -- crActiveContractStates <- traverse (\i -> Contract.getState @t i >>= \s -> pure (i, fromResp $ Contract.serialisableState (Proxy @t) s)) activeContractIDs
+    -- pure ContractReport {crAvailableContracts, crActiveContractStates}
     activeContractIDs <- fmap fst . Map.toList <$> Contract.getActiveContracts @t
-    crAvailableContracts <-
-        traverse
-            (\t -> ContractSignatureResponse t <$> Contract.exportSchema @t t)
-            installedContracts
     crActiveContractStates <- traverse (\i -> Contract.getState @t i >>= \s -> pure (i, fromResp $ Contract.serialisableState (Proxy @t) s)) activeContractIDs
-    pure ContractReport {crAvailableContracts, crActiveContractStates}
+    pure ContractReport {crActiveContractStates}
 
 -- | An STM stream of 'a's (poor man's pull-based FRP)
 newtype STMStream a = STMStream{ unSTMStream :: STM (a, Maybe (STMStream a)) }
@@ -103,7 +106,7 @@ joinStream STMStream{unSTMStream} = STMStream $ unSTMStream >>= go where
             Right (newStream, Nothing) -> go (newStream, Nothing)
 
 singleton :: STM a -> STMStream a
-singleton = STMStream . fmap (\a -> (a, Nothing))
+singleton = STMStream . fmap (, Nothing)
 
 instance Applicative STMStream where
     pure = singleton . pure
@@ -182,7 +185,7 @@ combinedWSStreamToClient wsState blockchainEnv instancesState = do
 initialWSState :: STM WSState
 initialWSState = WSState <$> STM.newTVar mempty <*> STM.newTVar mempty
 
-slotChange :: BlockchainEnv -> (STMStream Slot)
+slotChange :: BlockchainEnv -> STMStream Slot
 slotChange = unfold . Instances.currentSlot
 
 walletFundsChange :: Wallet -> BlockchainEnv -> STMStream Ledger.Value

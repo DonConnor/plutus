@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE DerivingVia          #-}
 {-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE StrictData           #-}
@@ -28,10 +27,10 @@ import           Wallet.Emulator.Wallet                  (Wallet)
 import           Wallet.Rollup.Types                     (AnnotatedTx)
 import           Wallet.Types                            (ContractInstanceId)
 
-data ContractReport t =
+newtype ContractReport t =
     ContractReport
-        { crAvailableContracts   :: [ContractSignatureResponse t]
-        , crActiveContractStates :: [(ContractInstanceId, PartiallyDecodedResponse PABReq)]
+        { --crAvailableContracts   :: [ContractSignatureResponse t]
+          crActiveContractStates :: [(ContractInstanceId, PartiallyDecodedResponse PABReq)]
         }
     deriving stock (Generic, Eq, Show)
     deriving anyclass (ToJSON, FromJSON)
