@@ -52,33 +52,35 @@ module Plutus.V1.Ledger.Scripts(
     unitDatum,
     ) where
 
-import qualified Prelude                          as Haskell
+import qualified Prelude                                  as Haskell
 
-import           Codec.CBOR.Decoding              (decodeBytes)
-import           Codec.Serialise                  (Serialise, decode, encode, serialise)
-import           Control.DeepSeq                  (NFData)
-import           Control.Monad.Except             (MonadError, runExceptT, throwError)
-import           Crypto.Hash                      (Digest, SHA256, hash)
-import           Data.Aeson                       (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
-import qualified Data.Aeson                       as JSON
-import qualified Data.Aeson.Extras                as JSON
-import qualified Data.ByteArray                   as BA
-import qualified Data.ByteString.Lazy             as BSL
-import           Data.Hashable                    (Hashable)
+import           Codec.CBOR.Decoding                      (decodeBytes)
+import           Codec.Serialise                          (Serialise, decode, encode, serialise)
+import           Control.DeepSeq                          (NFData)
+import           Control.Monad.Except                     (MonadError, runExceptT, throwError)
+import           Crypto.Hash                              (Digest, SHA256, hash)
+import           Data.Aeson                               (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
+import qualified Data.Aeson                               as JSON
+import qualified Data.Aeson.Extras                        as JSON
+import qualified Data.ByteArray                           as BA
+import qualified Data.ByteString.Lazy                     as BSL
+import           Data.Hashable                            (Hashable)
 import           Data.String
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Extras
 import qualified Flat
-import           GHC.Generics                     (Generic)
-import           Plutus.V1.Ledger.Bytes           (LedgerBytes (..))
-import           Plutus.V1.Ledger.Orphans         ()
-import qualified PlutusCore                       as PLC
-import           PlutusTx                         (CompiledCode, IsData (..), getPlc, makeLift)
-import           PlutusTx.Builtins                as Builtins
-import           PlutusTx.Evaluation              (ErrorWithCause (..), EvaluationError (..), evaluateCekTrace)
-import           PlutusTx.Lift                    (liftCode)
+import           GHC.Generics                             (Generic)
+import           Plutus.V1.Ledger.Bytes                   (LedgerBytes (..))
+import           Plutus.V1.Ledger.Orphans                 ()
+import qualified PlutusCore                               as PLC
+import qualified PlutusCore.Evaluation.Machine.ExBudget   as PLC
+import           PlutusTx                                 (CompiledCode, IsData (..), getPlc, makeLift)
+import           PlutusTx.Builtins                        as Builtins
+import           PlutusTx.Evaluation                      (ErrorWithCause (..), EvaluationError (..), evaluateCekTrace)
+import           PlutusTx.Lift                            (liftCode)
 import           PlutusTx.Prelude
-import qualified UntypedPlutusCore                as UPLC
+import qualified UntypedPlutusCore                        as UPLC
+import qualified UntypedPlutusCore.Evaluation.Machine.Cek as UPLC
 
 -- | A script on the chain. This is an opaque type as far as the chain is concerned.
 newtype Script = Script { unScript :: UPLC.Program UPLC.DeBruijn PLC.DefaultUni PLC.DefaultFun () }
@@ -171,7 +173,7 @@ data ScriptError =
     deriving anyclass (ToJSON, FromJSON)
 
 -- | Evaluate a script, returning the trace log.
-evaluateScript :: forall m . (MonadError ScriptError m) => Script -> m [Haskell.String]
+evaluateScript :: forall m . (MonadError ScriptError m) => Script -> m (PLC.ExBudget, [Haskell.String])
 evaluateScript s = do
     -- TODO: evaluate the nameless debruijn program directly
     let namedProgram =
@@ -181,13 +183,13 @@ evaluateScript s = do
     p <- case PLC.runQuote $ runExceptT @PLC.FreeVariableError $ UPLC.unDeBruijnProgram namedProgram of
         Right p -> return p
         Left e  -> throwError $ MalformedScript $ Haskell.show e
-    let (logOut, _tally, result) = evaluateCekTrace p
+    let (logOut, UPLC.TallyingSt _ budget, result) = evaluateCekTrace p
     case result of
         Right _ -> Haskell.pure ()
         Left errWithCause@(ErrorWithCause err _) -> throwError $ case err of
             InternalEvaluationError {} -> EvaluationException $ Haskell.show errWithCause
             UserEvaluationError {}     -> EvaluationError logOut -- TODO fix this error channel fuckery
-    Haskell.pure logOut
+    Haskell.pure (budget, logOut)
 
 instance ToJSON Script where
     toJSON = JSON.String . JSON.encodeSerialise
@@ -346,7 +348,7 @@ runScript
     -> Validator
     -> Datum
     -> Redeemer
-    -> m [Haskell.String]
+    -> m (PLC.ExBudget, [Haskell.String])
 runScript context validator datum redeemer = do
     evaluateScript (applyValidator context validator datum redeemer)
 
@@ -365,7 +367,7 @@ runMintingPolicyScript
     => Context
     -> MintingPolicy
     -> Redeemer
-    -> m [Haskell.String]
+    -> m (PLC.ExBudget, [Haskell.String])
 runMintingPolicyScript context mps red = do
     evaluateScript (applyMintingPolicyScript context mps red)
 
