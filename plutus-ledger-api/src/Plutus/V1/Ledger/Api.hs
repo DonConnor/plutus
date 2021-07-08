@@ -26,6 +26,7 @@ module Plutus.V1.Ledger.Api (
     , ExBudget (..)
     , ExCPU (..)
     , ExMemory (..)
+    , SatInt (..)
     -- ** Verbose mode and log output
     , VerboseMode (..)
     , LogOutput
@@ -77,6 +78,7 @@ import           Data.ByteString.Lazy                             (fromStrict)
 import           Data.ByteString.Short
 import           Data.Either
 import           Data.Maybe                                       (isJust)
+import           Data.SatInt
 import           Data.Text                                        (Text)
 import qualified Data.Text                                        as Text
 import           Data.Text.Prettyprint.Doc
