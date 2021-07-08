@@ -58,14 +58,14 @@ module Plutus.V1.Ledger.Api (
     , UpperBound (..)
     , LowerBound (..)
     -- *** Newtypes for script/datum types and hash types
-    , Validator (..)
-    , ValidatorHash (..)
-    , MintingPolicy (..)
-    , MintingPolicyHash (..)
-    , Redeemer (..)
-    , RedeemerHash (..)
-    , Datum (..)
-    , DatumHash (..)
+    , Scripts.Validator (..)
+    , Scripts.ValidatorHash (..)
+    , Scripts.MintingPolicy (..)
+    , Scripts.MintingPolicyHash (..)
+    , Scripts.Redeemer (..)
+    , Scripts.RedeemerHash (..)
+    , Scripts.Datum (..)
+    , Scripts.DatumHash (..)
     -- * Errors
     , EvaluationError (..)
 ) where
@@ -90,19 +90,17 @@ import           Plutus.V1.Ledger.Credential
 import           Plutus.V1.Ledger.Crypto
 import           Plutus.V1.Ledger.DCert
 import           Plutus.V1.Ledger.Interval
-import           Plutus.V1.Ledger.Scripts
+import           Plutus.V1.Ledger.Scripts                         (Script (..))
+import qualified Plutus.V1.Ledger.Scripts                         as Scripts
 import           Plutus.V1.Ledger.Slot
 import           PlutusCore                                       as PLC
-import qualified PlutusCore.DeBruijn                              as PLC
 import           PlutusCore.Evaluation.Machine.CostModelInterface (CostModelParams, applyCostModelParams)
 import           PlutusCore.Evaluation.Machine.ExBudget           (ExBudget (..))
 import qualified PlutusCore.Evaluation.Machine.ExBudget           as PLC
 import           PlutusCore.Evaluation.Machine.ExMemory           (ExCPU (..), ExMemory (..))
 import           PlutusCore.Evaluation.Machine.MachineParameters
-import qualified PlutusCore.MkPlc                                 as PLC
 import           PlutusCore.Pretty
 import           PlutusTx                                         (Data (..), IsData (..))
-import qualified PlutusTx.Lift                                    as PlutusTx
 import qualified UntypedPlutusCore                                as UPLC
 import qualified UntypedPlutusCore.Evaluation.Machine.Cek         as UPLC
 
@@ -137,7 +135,7 @@ anything, we're just going to create new versions.
 -- | Check if a 'Script' is "valid". At the moment this just means "deserialises correctly", which in particular
 -- implies that it is (almost certainly) an encoded script and cannot be interpreted as some other kind of encoded data.
 validateScript :: SerializedScript -> Bool
-validateScript = isRight . CBOR.deserialiseOrFail @Script . fromStrict . fromShort
+validateScript = isRight . CBOR.deserialiseOrFail @Scripts.Script . fromStrict . fromShort
 
 validateCostModelParams :: CostModelParams -> Bool
 validateCostModelParams = isJust . applyCostModelParams PLC.defaultCekCostModel
@@ -170,13 +168,10 @@ instance Pretty EvaluationError where
 -- | Shared helper for the evaluation functions, deserializes the 'SerializedScript' , applies it to its arguments, and un-deBruijn-ifies it.
 mkTermToEvaluate :: (MonadError EvaluationError m) => SerializedScript -> [Data] -> m (UPLC.Term UPLC.Name PLC.DefaultUni PLC.DefaultFun ())
 mkTermToEvaluate bs args = do
-    (Script (UPLC.Program _ v t)) <- liftEither $ first CodecError $ CBOR.deserialiseOrFail $ fromStrict $ fromShort bs
+    s@(Script (UPLC.Program _ v _)) <- liftEither $ first CodecError $ CBOR.deserialiseOrFail $ fromStrict $ fromShort bs
     unless (v == PLC.defaultVersion ()) $ throwError $ IncompatibleVersionError v
-    let namedTerm = UPLC.termMapNames PLC.fakeNameDeBruijn t
-        -- This should go away when Data is a builtin
-        termArgs = fmap PlutusTx.lift args
-        applied = PLC.mkIterApp () namedTerm termArgs
-    liftEither $ first DeBruijnError $ PLC.runQuoteT $ UPLC.unDeBruijnTerm applied
+    UPLC.Program _ _ t <- liftEither $ first DeBruijnError $ Scripts.mkTermToEvaluate (Scripts.applyArguments s args)
+    pure t
 
 -- | Evaluates a script, with a cost model and a budget that restricts how many
 -- resources it can use according to the cost model.  There's a default cost

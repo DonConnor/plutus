@@ -28,6 +28,8 @@ module Plutus.V1.Ledger.Scripts(
     runMintingPolicyScript,
     applyValidator,
     applyMintingPolicyScript,
+    mkTermToEvaluate,
+    applyArguments,
     -- * Script wrappers
     mkValidatorScript,
     Validator (..),
@@ -73,12 +75,15 @@ import           GHC.Generics                             (Generic)
 import           Plutus.V1.Ledger.Bytes                   (LedgerBytes (..))
 import           Plutus.V1.Ledger.Orphans                 ()
 import qualified PlutusCore                               as PLC
+import qualified PlutusCore.DeBruijn                      as PLC
 import qualified PlutusCore.Evaluation.Machine.ExBudget   as PLC
+import qualified PlutusCore.MkPlc                         as PLC
 import           PlutusTx                                 (CompiledCode, IsData (..), getPlc, makeLift)
 import           PlutusTx.Builtins                        as Builtins
 import           PlutusTx.Evaluation                      (ErrorWithCause (..), EvaluationError (..), evaluateCekTrace)
-import           PlutusTx.Lift                            (liftCode)
-import           PlutusTx.Prelude
+import           PlutusTx.Lift                            (lift)
+import           PlutusTx.Prelude                         (Either (Left, Right), Eq (..), Integer, Ord (compare), const,
+                                                           return, ($), (.))
 import qualified UntypedPlutusCore                        as UPLC
 import qualified UntypedPlutusCore.Evaluation.Machine.Cek as UPLC
 
@@ -161,10 +166,6 @@ fromPlc (UPLC.Program a v t) =
     let nameless = UPLC.termMapNames UPLC.unNameDeBruijn t
     in Script $ UPLC.Program a v nameless
 
--- | Given two 'Script's, compute the 'Script' that consists of applying the first to the second.
-applyScript :: Script -> Script -> Script
-applyScript (unScript -> s1) (unScript -> s2) = Script $ s1 `UPLC.applyProgram` s2
-
 data ScriptError =
     EvaluationError [Haskell.String] -- ^ Expected behavior of the engine (e.g. user-provided error)
     | EvaluationException Haskell.String -- ^ Unexpected behavior of the engine (a bug)
@@ -172,15 +173,23 @@ data ScriptError =
     deriving (Haskell.Show, Haskell.Eq, Generic, NFData)
     deriving anyclass (ToJSON, FromJSON)
 
+applyArguments :: Script -> [Data] -> Script
+applyArguments (Script (UPLC.Program a v t)) args =
+    let termArgs = Haskell.fmap (UPLC.termMapNames UPLC.unNameDeBruijn . lift) args
+        applied = PLC.mkIterApp () t termArgs
+    in Script (UPLC.Program a v applied)
+
+mkTermToEvaluate :: Script -> Either PLC.FreeVariableError (UPLC.Program UPLC.Name PLC.DefaultUni PLC.DefaultFun ())
+mkTermToEvaluate (Script (UPLC.Program a v t)) =
+    -- TODO: evaluate the nameless debruijn program directly
+    let named = UPLC.termMapNames PLC.fakeNameDeBruijn t
+        namedProgram = UPLC.Program a v named
+    in PLC.runQuote $ runExceptT @PLC.FreeVariableError $ UPLC.unDeBruijnProgram namedProgram
+
 -- | Evaluate a script, returning the trace log.
 evaluateScript :: forall m . (MonadError ScriptError m) => Script -> m (PLC.ExBudget, [Haskell.String])
 evaluateScript s = do
-    -- TODO: evaluate the nameless debruijn program directly
-    let namedProgram =
-            let (UPLC.Program a v t) = unScript s
-                named = UPLC.termMapNames (\(UPLC.DeBruijn ix) -> UPLC.NamedDeBruijn "" ix) t
-            in UPLC.Program a v named
-    p <- case PLC.runQuote $ runExceptT @PLC.FreeVariableError $ UPLC.unDeBruijnProgram namedProgram of
+    p <- case mkTermToEvaluate s of
         Right p -> return p
         Left e  -> throwError $ MalformedScript $ Haskell.show e
     let (logOut, UPLC.TallyingSt _ budget, result) = evaluateCekTrace p
@@ -339,7 +348,7 @@ applyValidator
     -> Redeemer
     -> Script
 applyValidator (Context valData) (Validator validator) (Datum datum) (Redeemer redeemer) =
-    ((validator `applyScript` (fromCompiledCode $ liftCode datum)) `applyScript` (fromCompiledCode $ liftCode redeemer)) `applyScript` (fromCompiledCode $ liftCode valData)
+    applyArguments validator [datum, redeemer, valData]
 
 -- | Evaluate a 'Validator' with its 'Context', 'Datum', and 'Redeemer', returning the log.
 runScript
@@ -359,7 +368,7 @@ applyMintingPolicyScript
     -> Redeemer
     -> Script
 applyMintingPolicyScript (Context valData) (MintingPolicy validator) (Redeemer red) =
-    (validator `applyScript` (fromCompiledCode $ liftCode red)) `applyScript` (fromCompiledCode $ liftCode valData)
+    applyArguments validator [red, valData]
 
 -- | Evaluate a 'MintingPolicy' with its 'Context' and 'Redeemer', returning the log.
 runMintingPolicyScript
