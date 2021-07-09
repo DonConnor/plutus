@@ -63,11 +63,19 @@ import           Data.ByteString            as BS
 import           Prelude                    hiding (String, error)
 
 import           PlutusTx.Builtins.Class
-import           PlutusTx.Builtins.Internal (BuiltinData, BuiltinString, BuiltinByteString, toHaskellByteString, fromHaskellByteString)
+import           PlutusTx.Builtins.Internal (BuiltinByteString, BuiltinData, BuiltinString)
 import qualified PlutusTx.Builtins.Internal as BI
 
-import           Prelude             hiding (String, error)
+import           Prelude                    hiding (String, error)
 
+
+{-# INLINABLE fromHaskellByteString #-}
+fromHaskellByteString :: BS.ByteString -> BuiltinByteString
+fromHaskellByteString = BI.BuiltinByteString
+
+{-# INLINABLE toHaskellByteString #-}
+toHaskellByteString :: BuiltinByteString -> BS.ByteString
+toHaskellByteString = BI.unBuiltinByteString
 
 {-# INLINABLE concatenate #-}
 -- | Concatenates two 'ByteString's.

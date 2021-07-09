@@ -88,22 +88,11 @@ import           Data.String          (IsString (..))
 import           PlutusCore.Data      (Data (..))
 import           PlutusTx.Applicative as Applicative
 import           PlutusTx.Bool        as Bool
-import PlutusTx.Builtins (BuiltinByteString
-                                , toHaskellByteString
-                                , fromHaskellByteString
-                                , concatenate
-                                , takeByteString
-                                , dropByteString
-                                , emptyByteString
-                                , equalsByteString
-                                , lessThanByteString
-                                , greaterThanByteString
-                                , sha2_256
-                                , sha3_256
-                                , verifySignature
-                                , decodeUtf8)
-import           PlutusTx.Builtins    (BuiltinString, appendString, charToString, emptyString, encodeUtf8,
-                                       equalsString, error, trace)
+import           PlutusTx.Builtins    (BuiltinByteString, BuiltinString, appendString, charToString, concatenate,
+                                       decodeUtf8, dropByteString, emptyByteString, emptyString, encodeUtf8,
+                                       equalsByteString, equalsString, error, fromHaskellByteString,
+                                       greaterThanByteString, lessThanByteString, sha2_256, sha3_256, takeByteString,
+                                       toHaskellByteString, trace, verifySignature)
 import qualified PlutusTx.Builtins    as Builtins
 import           PlutusTx.Either      as Either
 import           PlutusTx.Enum        as Enum
