@@ -312,7 +312,6 @@
         "unordered-containers".flags.debug = false;
         "easy-file".revision = (((hackage."easy-file")."0.2.2").revisions).default;
         "data-default-class".revision = (((hackage."data-default-class")."0.1.2.0").revisions).default;
-        "tasty-expected-failure".revision = (((hackage."tasty-expected-failure")."0.12.3").revisions).default;
         "parser-combinators".revision = (((hackage."parser-combinators")."1.3.0").revisions).default;
         "parser-combinators".flags.dev = false;
         "pretty-simple".revision = (((hackage."pretty-simple")."4.0.0.0").revisions).default;
@@ -517,7 +516,6 @@
         "libyaml".revision = (((hackage."libyaml")."0.1.2").revisions).default;
         "libyaml".flags.system-libyaml = false;
         "libyaml".flags.no-unicode = false;
-        "hedgehog-corpus".revision = (((hackage."hedgehog-corpus")."0.2.0").revisions).default;
         "servant-subscriber".revision = (((hackage."servant-subscriber")."0.7.0.0").revisions).default;
         "servant-subscriber".flags.websockets_0_11 = true;
         "generic-lens-core".revision = (((hackage."generic-lens-core")."2.1.0.0").revisions).default;

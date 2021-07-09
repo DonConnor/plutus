@@ -194,4 +194,51 @@ source-repository-package
   location: https://github.com/input-output-hk/goblins
   tag: cde90a2b27f79187ca8310b6549331e59595e7ba
 
+package cardano-api
+  tests: False
+
+package cardano-cli
+  tests: False
+
+package cardano-node
+  tests: False
+
+package cardano-node-chairman
+  tests: False
+
+package byron-spec-ledger
+  tests: False
+
+package iohk-monitoring
+  tests: False
+
+package ouroboros-consensus-test
+  tests: False
+
+package ouroboros-consensus-cardano-test
+  tests: False
+
+package ouroboros-network
+  tests: False
+
+package ouroboros-network-framework
+  tests: False
+
+package small-steps
+  tests: False
+
+package small-steps-test
+  tests: False
+
+package goblins
+  tests: False
+
+package io-classes
+  tests: False
+
+package cardano-ledger-alonzo-test
+  tests: False
+
+package flat
+  tests: False
 
