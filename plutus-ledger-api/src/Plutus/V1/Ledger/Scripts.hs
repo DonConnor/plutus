@@ -78,14 +78,14 @@ import qualified PlutusCore                               as PLC
 import qualified PlutusCore.DeBruijn                      as PLC
 import qualified PlutusCore.Evaluation.Machine.ExBudget   as PLC
 import qualified PlutusCore.MkPlc                         as PLC
-import           PlutusTx                                 (CompiledCode, IsData (..), getPlc, makeLift)
+import           PlutusTx                                 (CompiledCode, Data, IsData (..), getPlc, makeLift)
 import           PlutusTx.Builtins                        as Builtins
 import           PlutusTx.Evaluation                      (ErrorWithCause (..), EvaluationError (..), evaluateCekTrace)
 import           PlutusTx.Lift                            (lift)
-import           PlutusTx.Prelude                         (Either (Left, Right), Eq (..), Integer, Ord (compare), const,
-                                                           return, ($), (.))
+import           PlutusTx.Prelude
 import qualified UntypedPlutusCore                        as UPLC
 import qualified UntypedPlutusCore.Evaluation.Machine.Cek as UPLC
+
 
 -- | A script on the chain. This is an opaque type as far as the chain is concerned.
 newtype Script = Script { unScript :: UPLC.Program UPLC.DeBruijn PLC.DefaultUni PLC.DefaultFun () }
